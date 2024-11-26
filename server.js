@@ -10,15 +10,16 @@ const app = express();
 var con = mysql.createConnection({
   host: "127.0.0.1",
   user: "root",
+  password: "shunmugam1502",
 });
 
 con.connect((err) => {
   if (err) throw err;
   console.log("Connected!");
-  con.query(`use employees;`, function (err, result) {
+  con.query(`use farmTranz;`, function (err, result) {
     console.log(result);
     if (err) {
-      con.query(`CREATE DATABASE employees;`, function (err, result) {
+      con.query(`CREATE DATABASE farmTranz;`, function (err, result) {
         console.log(result);
         if (err) {
           throw err;
@@ -39,8 +40,9 @@ app.use(express.json());
 const users = [];
 const sessions = [];
 app.post("/register", (req, res) => {
-  const { username, password } = req.body;
-  if (username == "" || password == "") {
+  console.log(req.body);
+  const { username, password, email } = req.body;
+  if (username == "" || password == "" || email == "") {
     res.status(400).json("Error");
   } else {
     con.query(
@@ -48,6 +50,7 @@ app.post("/register", (req, res) => {
 PersonID int NOT NULL AUTO_INCREMENT,
 username varchar(255) NOT NULL,
 password varchar(255) NOT NULL,
+email varchar(255) NOT NULL,
 PRIMARY KEY (PersonID)
 );`,
       function (err, result) {
@@ -58,7 +61,7 @@ PRIMARY KEY (PersonID)
       }
     );
     con.query(
-      `insert into usercreds (username, password) values('${username.toLowerCase()}', '${password.toLowerCase()}');`,
+      `insert into usercreds (username, password,email) values('${username.toLowerCase()}', '${password.toLowerCase()}','${email.toLowerCase()}');`,
       (err, result) => {
         if (err) {
           throw err;
@@ -66,7 +69,13 @@ PRIMARY KEY (PersonID)
         console.log("user added to db");
       }
     );
-    console.log(username.toLowerCase() + " " + password.toLowerCase());
+    console.log(
+      username.toLowerCase() +
+        " " +
+        password.toLowerCase() +
+        " " +
+        email.toLowerCase()
+    );
     res.status(201).json("Registration success");
   }
 });
@@ -102,14 +111,14 @@ app.get("/getall", (req, res) => {
   const sessionToken = req.headers.cookie.split("=")[1];
   if (sessions[sessionToken]) {
     const username = sessions[sessionToken].username;
-    con.query(`select * from employeedetails`, function (err, result) {
+    con.query(`select * from userdetails`, function (err, result) {
+      if (err) throw err;
       console.log(result);
       if (result.length == 0) {
         result.push({ message: "No result found" });
       }
       result.push({ username: username });
       res.json(result);
-      if (err) throw err;
       console.log("All details fetched");
     });
   } else {
@@ -125,9 +134,7 @@ app.get("/filter", (req, res) => {
     let queries = Object.keys(req.body)[0];
 
     con.query(
-      `select * from employeedetails where ${queries} = '${
-        data[`${queries}`]
-      }'`,
+      `select * from userdetails where ${queries} = '${data[`${queries}`]}'`,
       function (err, result) {
         if (err) throw err;
         console.log(result.length);
@@ -151,27 +158,27 @@ app.post("/add", (req, res) => {
 
     const {
       name,
-      contactPerson,
+      email,
       address,
       city,
       zipCode,
       country,
       emergencyContact,
       phone,
-      bloodGroup,
+      usertype,
       dob,
     } = req.body;
     let data = req.body;
     let keys = [
       "name",
-      "contactPerson",
+      "email",
       "address",
       "city",
       "zipCode",
       "country",
       "emergencyContact",
       "phone",
-      "bloodGroup",
+      "usertype",
       "dob",
     ];
     let missingfield = keys.filter((a) => {
@@ -191,11 +198,11 @@ app.post("/add", (req, res) => {
       if (missingfield.length > 0) {
         res.status(400).send(missingresult);
       } else if (alreadyexist == true) {
-        res.status(400).json("Employee Details already present");
+        res.status(400).json("User Details already present");
       } else {
         con.query(
-          `insert into employeedetails ( name, contactPerson, address, city, zipCode, country, emergencyContact, phone, bloodGroup,dob)
-  VALUES ('${name}', '${contactPerson}', '${address}', '${city}', '${zipCode}', '${country}', '${emergencyContact}', '${phone}', '${bloodGroup}', '${dob}');`,
+          `insert into userdetails ( name, email, address, city, zipCode, country, emergencyContact, phone, usertype,dob)
+  VALUES ('${name}', '${email}', '${address}', '${city}', '${zipCode}', '${country}', '${emergencyContact}', '${phone}', '${usertype}', '${dob}');`,
           function (err, result) {
             if (err) throw err;
             else {
@@ -210,17 +217,17 @@ app.post("/add", (req, res) => {
       }
     };
     con.query(
-      `CREATE TABLE IF NOT EXISTS employeedetails(
+      `CREATE TABLE IF NOT EXISTS userdetails(
 PersonID int NOT NULL AUTO_INCREMENT,
 name varchar(25) NOT NULL,
-contactPerson varchar(25) NOT NULL,
+email varchar(25) NOT NULL,
 address varchar(25) NOT NULL,
 city varchar(10) NOT NULL,
 zipCode varchar(9) NOT NULL,
 country varchar(10) NOT NULL,
 emergencyContact varchar(15) NOT NULL,
 phone varchar(15) NOT NULL,
-bloodGroup varchar(5) NOT NULL,
+usertype varchar(10) NOT NULL,
 dob DATE NOT NULL,
 PRIMARY KEY (PersonID)
 );`,
@@ -232,7 +239,7 @@ PRIMARY KEY (PersonID)
       }
     );
     con.query(
-      `select * from employeedetails where name = '${name}'`,
+      `select * from userdetails where name = '${name}'`,
       function (err, result) {
         console.log(result.length);
         if (result.length > 0) {
@@ -254,36 +261,39 @@ app.put("/update", (req, res) => {
     const username = sessions[sessionToken].username;
     let data = req.body;
     let entry = Object.entries(data);
+    if (data["name"] != undefined && data["dob"] != undefined) {
+      con.query(
+        `select * from userdetails where name = '${data["name"]}' and dob ='${data["dob"]}'`,
+        function (err, result) {
+          if (err) throw err;
+          console.log(result);
+          if (result.length > 0) {
+            let temp = "";
+            entry.forEach((e, i) => {
+              if (i == entry.length - 1) {
+                temp += `${e[0]}='${e[1]}'`;
+              } else {
+                temp += `${e[0]}='${e[1]}',`;
+              }
+            });
 
-    con.query(
-      `select * from employeedetails where name = '${data["name"]}' and dob ='${data["dob"]}'`,
-      function (err, result) {
-        if (err) throw err;
-        console.log(result);
-        if (result.length > 0) {
-          let temp = "";
-          entry.forEach((e, i) => {
-            if (i == entry.length - 1) {
-              temp += `${e[0]}='${e[1]}'`;
-            } else {
-              temp += `${e[0]}='${e[1]}',`;
-            }
-          });
-
-          con.query(
-            `update employeedetails set ${temp} where dob='${data["dob"]}' and name='${data["name"]}' ;`,
-            function (err, result) {
-              if (err) throw err;
-              console.log("details updated");
-              console.log(result);
-              res.json(req.body);
-            }
-          );
-        } else {
-          res.status(400).json("Employee details does not exist");
+            con.query(
+              `update userdetails set ${temp} where dob='${data["dob"]}' and name='${data["name"]}' ;`,
+              function (err, result) {
+                if (err) throw err;
+                console.log("details updated");
+                console.log(result);
+                res.json(req.body);
+              }
+            );
+          } else {
+            res.status(400).json("User details does not exist");
+          }
         }
-      }
-    );
+      );
+    } else {
+      res.status(400).json("Name and Dob is necessary");
+    }
   } else {
     res.sendStatus(401);
   }
@@ -294,28 +304,31 @@ app.delete("/remove", (req, res) => {
   if (sessions[sessionToken]) {
     const username = sessions[sessionToken].username;
     const { name, dob } = req.body;
-
-    con.query(
-      `select * from employeedetails where name = '${name}' and dob ='${dob}'`,
-      function (err, result) {
-        if (err) throw err;
-        console.log(result);
-        if (result > 0) {
-          result.forEach((e) => {
-            con.query(
-              `delete from employeedetails where id=${e["id"]};`,
-              function (err, result) {
-                if (err) throw err;
-                console.log("Employee details deleted");
-              }
-            );
-          });
-          res.json("Employee details deleted:");
-        } else {
-          res.status(400).json("Employee details does not exist");
+    if (name != undefined && dob != undefined) {
+      con.query(
+        `select * from userdetails where name = '${name}' and dob ='${dob}'`,
+        function (err, result) {
+          if (err) throw err;
+          console.log(result);
+          if (result.length > 0) {
+            result.forEach((e) => {
+              con.query(
+                `delete from userdetails where PersonID=${e["PersonID"]};`,
+                function (err, result) {
+                  if (err) throw err;
+                  console.log("User details deleted");
+                }
+              );
+            });
+            res.json("User details deleted:");
+          } else {
+            res.status(400).json("User details does not exist");
+          }
         }
-      }
-    );
+      );
+    } else {
+      res.status(400).json("Name and Dob is necessary");
+    }
   } else {
     res.sendStatus(401);
   }
